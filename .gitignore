@@ -1,0 +1,16 @@
+*.txt
+*.tsv
+*.jpg
+*.docx
+*.ipynb
+.ipynb_checkpoints/
+boundaries/
+boundaries_words/
+DATASET/
+lines/
+prepared/
+scan/
+text/
+words/
+.DS_Store
+.detect_lines.1.py
