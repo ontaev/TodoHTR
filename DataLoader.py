@@ -28,7 +28,7 @@ class DataLoader:
 
         with open(file_path + "words.txt", 'r') as input_file:
             for line in input_file:
-                line_split = line.strip().split(' ')
+                line_split = line.strip().split('\t')
                 file_name = line_split[1]
                 gt_text = line_split[0]
                 chars = chars.union(set(list(gt_text)))
@@ -41,6 +41,9 @@ class DataLoader:
         self.validation_samples = self.samples[split_idx:]
 
         self.num_train_samples_per_epoch = 2000
+        self.char_list = sorted(list(chars))
+
+        print(self.char_list)
 
     def train_set(self):
         """ switch to randomly chosen subset of training set """
