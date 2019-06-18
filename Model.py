@@ -14,10 +14,12 @@ class Model:
     image_size = (32, 192)
     max_text_len = 24
 
-    def __init__(self, char_list, decoder_type=DecoderType.best_path):
+    def __init__(self, char_list, decoder_type = DecoderType.best_path, must_restore = False):
         """ init CNN, RNN, CTC and TensorFlow """
         self.char_list = char_list
         self.decoder_type = decoder_type
+        self.must_restore = must_restore
+        self.snap_id = 0
 
 
         self.is_train = tf.placeholder(tf.bool, name='is_train')
@@ -27,6 +29,16 @@ class Model:
         self.setup_CNN()
         self.setup_RNN()
         self.setup_CTC()
+
+        # setup optimizer to train NN
+        self.batches_trained = 0
+        self.learning_rate = tf.placeholder(tf.float32, shape=[])
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) 
+        with tf.control_dependencies(self.update_ops):
+        	self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
+
+        # initialize TF
+        (self.sess, self.saver) = self.setup_TF()
 
     def setup_CNN(self):
         """ init CNN layers """
@@ -94,3 +106,96 @@ class Model:
             self.decoder = tf.nn.ctc_greedy_decoder(inputs=self.ctc_in, sequence_length=self.seq_len)
         elif self.decoder_type == DecoderType.beam_search:
             self.decoder = tf.nn.ctc_beam_search_decoder(inputs=self.ctc_in, sequence_length=self.seq_len, beam_width=50, merge_repeated=False)
+    
+    def setup_TF(self,):
+        """ init TensorFlow """
+        sess=tf.Session()
+
+        # saver saves model to file
+        saver = tf.train.Saver(max_to_keep=1) 
+        model_dir = 'model/'
+        latest_snapshot = tf.train.latest_checkpoint(model_dir) # is there a saved model?
+
+        # if model must be restored (for inference), there must be a snapshot
+        if self.must_restore and not latest_snapshot:
+            raise Exception('No saved model found in: ' + model_dir)
+
+		# load saved model if available
+        if latest_snapshot:
+            print('Init with stored values from ' + latest_snapshot)
+            saver.restore(sess, latest_snapshot)
+        else:
+            print('Init with new values')
+            sess.run(tf.global_variables_initializer())
+        
+        return (sess,saver)
+
+    def to_sparse(self, texts):
+        "put ground truth texts into sparse tensor for ctc_loss"
+        indices = []
+        values = []
+        shape = [len(texts), 0] # last entry must be max(labelList[i])
+
+	    # go over all texts
+        for (batch_element, text) in enumerate(texts):
+            # convert to string of label (i.e. class-ids)
+            label_str = [self.char_list.index(c) for c in text]
+            # sparse tensor must have size of max. label-string
+            if len(label_str) > shape[1]:
+                shape[1] = len(label_str)
+            # put each label into sparse tensor
+            for (i, label) in enumerate(label_str):
+                indices.append([batch_element, i])
+                values.append(label)
+        
+        return (indices, values, shape)
+    
+    def decoder_output_to_text(self, ctc_output, batch_size):
+        "extract texts from output of CTC decoder"
+		
+		# contains string of labels for each batch element
+        encoded_label_strs = [[] for i in range(batch_size)]
+        
+        # ctc returns tuple, first element is SparseTensor 
+        decoded=ctc_output[0][0] 
+
+        # go over all indices and save mapping: batch -> values
+        
+        for (idx, idx2d) in enumerate(decoded.indices):
+        	label = decoded.values[idx]
+        	batch_element = idx2d[0] # index according to [b,t]
+        	encoded_label_strs[batch_element].append(label)
+        
+        # map labels to chars for all batch elements
+        return [str().join([self.char_list[c] for c in label_str]) for label_str in encoded_label_strs]
+
+    def train_batch(self, batch):
+        """ feed a batch into the NN to train it"""
+
+        num_batch_elements = len(batch.images)
+        sparse = self.to_sparse(batch.gt_texts)
+        rate = 0.01 if self.batches_trained < 10 else (0.001 if self.batches_trained < 10000 else 0.0001) # decay learning rate
+        eval_list = [self.optimizer, self.loss]
+        feed_dict = {self.input_images : batch.images, self.gt_texts : sparse , self.seq_len : [Model.max_text_len] * num_batch_elements, self.learning_rate : rate, self.is_train: True}
+        (_, loss_val) = self.sess.run(eval_list, feed_dict)
+        self.batches_trained += 1
+        return loss_val
+
+    def infer_batch(self, batch):
+        """ feed a batch into the NN to recognize the texts"""
+		
+		# decode 
+        num_batch_elements = len(batch.images)
+        eval_list = [self.decoder]
+        feed_dict = {self.input_images : batch.images, self.seq_len : [Model.max_text_len] * num_batch_elements, self.is_train: False}
+        eval_res = self.sess.run(eval_list, feed_dict)
+        decoded = eval_res[0]
+        texts = self.decoder_output_to_text(decoded, num_batch_elements)
+
+        return texts
+
+    def save(self):
+        """ save model to file """
+        
+        self.snap_id += 1
+        self.saver.save(self.sess, '../model/snapshot', global_step=self.snap_id)
