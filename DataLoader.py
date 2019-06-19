@@ -2,6 +2,7 @@ import numpy as np
 import cv2 as cv
 import os
 import random
+from SamplePreprocessor import preprocess
 
 class Sample:
     """ sample from dataset containing image and ground truth text """
@@ -68,6 +69,6 @@ class DataLoader:
         """ get next batch """
         batch_range = range(self.curr_idx, self.curr_idx + self.batch_size)
         gt_texts = [self.samples[i].gt_text for i in batch_range]
-        images = [cv.imread(self.samples[i].file_path, cv.IMREAD_GRAYSCALE) for i in batch_range]
+        images = [preprocess(cv.imread(self.samples[i].file_path, cv.IMREAD_GRAYSCALE), self.image_size, True) for i in batch_range]
         self.curr_idx += self.batch_size
         return Batch(gt_texts, images)

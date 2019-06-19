@@ -3,6 +3,7 @@ import argparse
 import cv2 as cv
 from DataLoader import DataLoader, Batch
 from Model import Model
+from SamplePreprocessor import preprocess
 
 class Params:
     char_list = ""
