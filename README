@@ -1,0 +1,6 @@
+This project is the attempt to apply neural networks in Todo Bicig word recognition.
+
+Dataset is based on existing Lamrim transliterated text. 
+Lamrim page images were separated on line's and then on word's images with opencv lib and matched with transliterated words.
+
+Validation of pairs "word/image" was made by hand with Yandex.Toloka service.
