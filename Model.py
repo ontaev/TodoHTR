@@ -47,7 +47,7 @@ class Model:
         # Parameters of layers
         kernel_size = [5, 5, 3, 3, 3]
         features_num = [1, 32, 64, 128, 128, 256]
-        pooling_ksize = pooling_stride = [(2,2), (2,2), (2,2), (1,2), (1,2)]
+        pooling_ksize = pooling_stride = [(2,2), (2,2), (2,2), (2,1), (2,1)]
         layers_num = len(pooling_ksize)
 
         pool = cnn_in
@@ -65,7 +65,7 @@ class Model:
     def setup_RNN(self):
         """ init RNN layers """
         #remove dimension with size = 1 (width)
-        rnn_in = tf.squeeze(self.cnn_out)
+        rnn_in = tf.squeeze(self.cnn_out, axis=[1])
 
 
         #basic LSTM cells
@@ -198,4 +198,4 @@ class Model:
         """ save model to file """
         
         self.snap_id += 1
-        self.saver.save(self.sess, '../model/snapshot', global_step=self.snap_id)
+        self.saver.save(self.sess, 'model/snapshot', global_step=self.snap_id)

@@ -30,18 +30,18 @@ class DataLoader:
         with open(file_path + "words.txt", 'r') as input_file:
             for line in input_file:
                 line_split = line.strip().split('\t')
-                file_name = line_split[1]
+                file_name = file_path+"/words/"+line_split[1]
                 gt_text = line_split[0]
                 chars = chars.union(set(list(gt_text)))
                 self.samples.append(Sample(gt_text, file_name))
         input_file.close()
 
         # split into train and validation     
-        split_idx = int(0.95 * len(self.samples))
+        split_idx = int(0.8 * len(self.samples))
         self.train_samples = self.samples[:split_idx]
         self.validation_samples = self.samples[split_idx:]
 
-        self.num_train_samples_per_epoch = 2000
+        self.num_train_samples_per_epoch = 5000
         self.char_list = sorted(list(chars))
 
         print(self.char_list)
@@ -68,7 +68,7 @@ class DataLoader:
     def get_next(self):
         """ get next batch """
         batch_range = range(self.curr_idx, self.curr_idx + self.batch_size)
-        gt_texts = [self.samples[i].gt_text for i in batch_range]
+        gt_texts = [self.samples[i].text for i in batch_range]
         images = [preprocess(cv.imread(self.samples[i].file_path, cv.IMREAD_GRAYSCALE), self.image_size, True) for i in batch_range]
         self.curr_idx += self.batch_size
         return Batch(gt_texts, images)

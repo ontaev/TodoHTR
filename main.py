@@ -1,14 +1,17 @@
 import sys
 import argparse
+import editdistance
 import cv2 as cv
 from DataLoader import DataLoader, Batch
-from Model import Model
+from Model import Model, DecoderType
 from SamplePreprocessor import preprocess
 
 class Params:
-    char_list = ""
+    
     input_image = "data/test.jpg"
     dataset = "DATASET/"
+    file_accuracy = "model/accuracy.txt"
+    char_list = "model/charlist.txt"
 
 def train(model, loader):
     """ train NN """
@@ -16,18 +19,18 @@ def train(model, loader):
     epoch = 0 # number of training epochs since start
     bestCharErrorRate = float('inf') # best valdiation character error rate
     noImprovementSince = 0 # number of epochs no improvement of character error rate occured
-    earlyStopping = 5 # stop training after this number of epochs without improvement
+    earlyStopping = 10 # stop training after this number of epochs without improvement
     while True:
         epoch += 1
         print('Epoch:', epoch)
 
         # train
         print('Train NN')
-        loader.trainSet()
-        while loader.hasNext():
-            iterInfo = loader.getIteratorInfo()
-            batch = loader.getNext()
-            loss = model.trainBatch(batch)
+        loader.train_set()
+        while loader.has_next():
+            iterInfo = loader.get_iterator_info()
+            batch = loader.get_next()
+            loss = model.train_batch(batch)
             print('Batch:', iterInfo[0],'/', iterInfo[1], 'Loss:', loss)
 
         # validate
@@ -39,7 +42,7 @@ def train(model, loader):
             bestCharErrorRate = charErrorRate
             noImprovementSince = 0
             model.save()
-            open(FilePaths.fnAccuracy, 'w').write('Validation character error rate of saved model: %f%%' % (charErrorRate*100.0))
+            open(Params.file_accuracy, 'w').write('Validation character error rate of saved model: %f%%' % (charErrorRate*100.0))
         else:
             print('Character error rate not improved')
             noImprovementSince += 1
@@ -52,25 +55,25 @@ def train(model, loader):
 def validate(model, loader):
     """ validate NN """
     print('Validate NN')
-    loader.validationSet()
+    loader.validation_set()
     numCharErr = 0
     numCharTotal = 0
     numWordOK = 0
     numWordTotal = 0
-    while loader.hasNext():
-        iterInfo = loader.getIteratorInfo()
+    while loader.has_next():
+        iterInfo = loader.get_iterator_info()
         print('Batch:', iterInfo[0],'/', iterInfo[1])
-        batch = loader.getNext()
-        (recognized, _) = model.inferBatch(batch)
+        batch = loader.get_next()
+        recognized = model.infer_batch(batch)
         
         print('Ground truth -> Recognized')    
         for i in range(len(recognized)):
-            numWordOK += 1 if batch.gtTexts[i] == recognized[i] else 0
+            numWordOK += 1 if batch.gt_texts[i] == recognized[i] else 0
             numWordTotal += 1
-            dist = editdistance.eval(recognized[i], batch.gtTexts[i])
+            dist = editdistance.eval(recognized[i], batch.gt_texts[i])
             numCharErr += dist
-            numCharTotal += len(batch.gtTexts[i])
-            print('[OK]' if dist==0 else '[ERR:%d]' % dist,'"' + batch.gtTexts[i] + '"', '->', '"' + recognized[i] + '"')
+            numCharTotal += len(batch.gt_texts[i])
+            print('[OK]' if dist==0 else '[ERR:%d]' % dist,'"' + batch.gt_texts[i] + '"', '->', '"' + recognized[i] + '"')
     
     # print validation result
     charErrorRate = numCharErr / numCharTotal
@@ -81,11 +84,11 @@ def validate(model, loader):
 def infer(model, input_image):
     """ recognize input image """
 
-    img = preprocess(cv2.imread(fnImg, cv2.IMREAD_GRAYSCALE), Model.imgSize)
+    img = preprocess(cv.imread(input_image, cv.IMREAD_GRAYSCALE), Model.image_size)
     batch = Batch(None, [img])
-    (recognized, probability) = model.inferBatch(batch, True)
+    recognized = model.infer_batch(batch)
     print('Recognized:', '"' + recognized[0] + '"')
-    print('Probability:', probability[0])
+    
 
 def main():
     """ main function """
@@ -96,12 +99,14 @@ def main():
 
     args = parser.parse_args()
 
+    decoder_type = DecoderType.best_path
+
     if args.train or args.validate:
 
         loader = DataLoader(Params.dataset, Model.batch_size, Model.image_size, Model.max_text_len)
 
         # save characters of model for inference mode
-        open(FilePaths.fnCharList, 'w').write(str().join(loader.charList))
+        open(Params.char_list, 'w').write(str().join(loader.char_list))
 
         if args.train:
 
@@ -116,8 +121,8 @@ def main():
 
     else:
         print("Recognizing image from "+ Params.input_image + " file!\n")
-        model = Model(open(FilePaths.fnCharList).read(), decoderType, mustRestore=True, dump=args.dump)
-        infer(model, FilePaths.fnInfer)
+        model = Model(open(Params.char_list).read(), decoder_type, must_restore=True)
+        infer(model, Params.input_image)
 
 if __name__ == '__main__':
     main()
