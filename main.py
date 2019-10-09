@@ -2,6 +2,8 @@ import sys
 import argparse
 import editdistance
 import cv2 as cv
+#import os
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 from DataLoader import DataLoader, Batch
 from Model import Model, DecoderType
 from SamplePreprocessor import preprocess
